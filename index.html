@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>变脸大师 · 川剧变脸</title>
+<style>
+  :root{
+    --gold:#e8c368; --gold-dim:#a8853f; --red:#c93b3b; --ink:#17131a;
+    --paper:#f2efe6; --panel:#221b26;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+  html,body{height:100%;}
+  body{
+    background:radial-gradient(1200px 800px at 50% -10%, #3a2430 0%, var(--ink) 60%);
+    color:var(--paper); font-family:"STKaiti","KaiTi","Noto Serif SC",serif;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  #stage{width:min(92vw,480px); display:flex; flex-direction:column; align-items:center; gap:14px;}
+
+  /* ---------- 顶栏 ---------- */
+  #hud{width:100%; display:flex; justify-content:space-between; align-items:flex-end;
+       border-bottom:1px solid rgba(232,195,104,.35); padding-bottom:8px;}
+  .hud-item{display:flex; flex-direction:column; align-items:center; min-width:70px;}
+  .hud-label{font-size:12px; letter-spacing:.35em; color:var(--gold-dim); text-indent:.35em;}
+  .hud-value{font-size:26px; color:var(--gold); font-weight:bold; font-variant-numeric:tabular-nums;}
+  #lives{font-size:18px; letter-spacing:2px; color:var(--red); text-shadow:0 0 8px rgba(201,59,59,.8);}
+  #lives .lost{color:#3a3340; text-shadow:none;}
+
+  /* ---------- 戏令 ---------- */
+  #order{width:100%; text-align:center; padding:8px 0 2px;}
+  #order-title{font-size:13px; letter-spacing:.6em; text-indent:.6em; color:var(--gold-dim); margin-bottom:6px;}
+  #order-body{display:flex; align-items:center; justify-content:center; gap:12px; min-height:44px;}
+  #order-swatch{width:34px; height:34px; border-radius:8px; border:2px solid var(--gold);
+                box-shadow:0 0 12px rgba(232,195,104,.35); display:none;}
+  #order-name{font-size:30px; font-weight:bold; letter-spacing:.2em; color:var(--paper);}
+
+  /* ---------- 脸谱 ---------- */
+  #face-wrap{position:relative; width:min(64vw,290px); height:min(64vw,290px);}
+  #face{width:100%; height:100%; filter:drop-shadow(0 10px 30px rgba(0,0,0,.6));}
+  #face.flash-good{animation:pop .35s ease;}
+  #face.flash-bad{animation:shake .4s ease;}
+  @keyframes pop{40%{transform:scale(1.07);} }
+  @keyframes shake{25%{transform:translateX(-8px);} 50%{transform:translateX(7px);} 75%{transform:translateX(-4px);}}
+  #face-text{font-size:15px; text-align:center; color:#9c93a8; letter-spacing:.2em; margin-top:-4px;}
+
+  /* ---------- 亮相按钮 ---------- */
+  #btn-hit{
+    width:min(70vw,320px); padding:16px 0 14px; margin-top:2px;
+    font-family:inherit; font-size:26px; font-weight:bold; letter-spacing:.7em; text-indent:.7em;
+    color:var(--ink); background:linear-gradient(180deg,#f3d488,var(--gold) 55%,#c9a04a);
+    border:none; border-radius:999px; cursor:pointer;
+    box-shadow:0 6px 0 #8a6a2a, 0 12px 24px rgba(0,0,0,.5);
+    transition:transform .06s, box-shadow .06s;
+  }
+  #btn-hit:active{transform:translateY(5px); box-shadow:0 1px 0 #8a6a2a, 0 4px 10px rgba(0,0,0,.5);}
+  #btn-hit:disabled{filter:grayscale(.8) brightness(.6); cursor:default;}
+
+  /* ---------- 遮罩层（开始/结束） ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(13,10,15,.92); z-index:10;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .overlay.hidden{display:none;}
+  .panel{
+    width:min(92vw,440px); max-height:92vh; overflow-y:auto;
+    background:var(--panel); border:1px solid rgba(232,195,104,.4); border-radius:16px;
+    padding:28px 26px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.7);
+  }
+  .panel h1{font-size:34px; color:var(--gold); letter-spacing:.25em; text-indent:.25em; margin-bottom:4px;}
+  .panel .sub{font-size:14px; color:#9c93a8; letter-spacing:.35em; text-indent:.35em; margin-bottom:20px;}
+
+  .diff-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;}
+  .diff-card{
+    border:1px solid rgba(232,195,104,.3); border-radius:12px; padding:12px 8px; cursor:pointer;
+    background:#2b2231; transition:all .15s; text-align:center;
+  }
+  .diff-card:hover{border-color:var(--gold);}
+  .diff-card.selected{border-color:var(--gold); background:#3d2f2a; box-shadow:0 0 14px rgba(232,195,104,.25);}
+  .diff-card .d-name{font-size:20px; color:var(--gold); letter-spacing:.15em;}
+  .diff-card .d-sub{font-size:11px; color:#9c93a8; margin-top:3px; letter-spacing:.08em;}
+  .diff-card .d-meta{font-size:11px; color:#c9b98a; margin-top:6px; line-height:1.5;}
+
+  .rules{text-align:left; font-size:13.5px; line-height:2; color:#cfc6b0; margin-bottom:18px; padding:0 6px;}
+  .rules b{color:var(--gold); font-weight:normal;}
+  .rules em{font-style:normal; border-bottom:1px dashed var(--gold-dim);}
+
+  .btn-main{
+    font-family:inherit; font-size:20px; letter-spacing:.5em; text-indent:.5em; font-weight:bold;
+    color:var(--ink); background:linear-gradient(180deg,#f3d488,var(--gold) 55%,#c9a04a);
+    border:none; border-radius:999px; padding:13px 0; width:100%; cursor:pointer;
+    box-shadow:0 5px 0 #8a6a2a;
+  }
+  .btn-main:active{transform:translateY(4px); box-shadow:0 1px 0 #8a6a2a;}
+  .btn-ghost{
+    margin-top:10px; background:none; border:1px solid rgba(232,195,104,.4); color:var(--gold);
+    border-radius:999px; padding:10px 0; width:100%; font-family:inherit; font-size:15px;
+    letter-spacing:.4em; text-indent:.4em; cursor:pointer;
+  }
+
+  /* ---------- 结算 ---------- */
+  #end-stats{display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; margin:16px 0 20px; font-size:14px;}
+  #end-stats .k{color:#9c93a8; text-align:right; letter-spacing:.15em;}
+  #end-stats .v{color:var(--gold); text-align:left; font-size:16px; font-variant-numeric:tabular-nums;}
+  #end-title{font-size:26px; color:var(--paper); letter-spacing:.2em;}
+  #end-rank{font-size:15px; color:var(--gold); margin-top:6px; letter-spacing:.3em;}
+  #end-record{font-size:12px; color:#9c93a8; margin-top:8px; letter-spacing:.1em; min-height:16px;}
+  #end-record .new{color:var(--red); animation:blink 1s infinite;}
+  @keyframes blink{50%{opacity:.3;}}
+
+  #mute{position:fixed; top:12px; right:14px; z-index:20; background:none;
+        border:1px solid rgba(232,195,104,.35); color:var(--gold); border-radius:8px;
+        padding:5px 10px; font-size:15px; cursor:pointer; font-family:inherit;}
+</style>
+</head>
+<body>
+
+<button id="mute">🔊</button>
+
+<div id="stage">
+  <div id="hud">
+    <div class="hud-item"><span class="hud-label">分数</span><span class="hud-value" id="score">0</span></div>
+    <div class="hud-item"><span class="hud-label">连击</span><span class="hud-value" id="combo">0</span></div>
+    <div class="hud-item"><span class="hud-label">命数</span><span id="lives"></span></div>
+  </div>
+
+  <div id="order">
+    <div id="order-title">戏 令</div>
+    <div id="order-body">
+      <span id="order-swatch"></span>
+      <span id="order-name">—</span>
+    </div>
+  </div>
+
+  <div id="face-wrap">
+    <svg id="face" viewBox="0 0 200 240">
+      <!-- 脸谱底色 -->
+      <path id="face-base" fill="#2f6fd0" d="M100 14 C150 14 172 58 172 112 C172 178 140 226 100 226 C60 226 28 178 28 112 C28 58 50 14 100 14 Z"/>
+      <!-- 额上火焰纹 -->
+      <path fill="#f2efe6" opacity=".92" d="M100 30 C112 44 118 56 112 68 C108 60 104 58 100 62 C96 58 92 60 88 68 C82 56 88 44 100 30 Z"/>
+      <path fill="#c93b3b" d="M100 40 C106 48 109 55 106 62 C104 58 102 57 100 60 C98 57 96 58 94 62 C91 55 94 48 100 40 Z"/>
+      <!-- 眼窝 -->
+      <path fill="#f2efe6" d="M44 96 C58 82 84 82 92 96 C84 108 58 110 44 96 Z"/>
+      <path fill="#f2efe6" d="M156 96 C142 82 116 82 108 96 C116 108 142 110 156 96 Z"/>
+      <!-- 眼珠 -->
+      <circle cx="70" cy="96" r="7" fill="#17131a"/>
+      <circle cx="130" cy="96" r="7" fill="#17131a"/>
+      <circle cx="72.5" cy="93.5" r="2" fill="#f2efe6"/>
+      <circle cx="132.5" cy="93.5" r="2" fill="#f2efe6"/>
+      <!-- 眉 -->
+      <path fill="none" stroke="#17131a" stroke-width="6" stroke-linecap="round" d="M46 82 C60 70 82 70 92 80"/>
+      <path fill="none" stroke="#17131a" stroke-width="6" stroke-linecap="round" d="M154 82 C140 70 118 70 108 80"/>
+      <!-- 鼻 -->
+      <path fill="none" stroke="#17131a" stroke-width="5" stroke-linecap="round" d="M100 112 L100 140 M92 146 C96 150 104 150 108 146"/>
+      <!-- 嘴 -->
+      <path fill="none" stroke="#17131a" stroke-width="6" stroke-linecap="round" d="M76 176 C88 186 112 186 124 176"/>
+      <!-- 腮红纹 -->
+      <path fill="#c93b3b" opacity=".85" d="M40 130 C52 126 62 130 64 142 C60 154 48 158 40 150 C36 142 36 136 40 130 Z"/>
+      <path fill="#c93b3b" opacity=".85" d="M160 130 C148 126 138 130 136 142 C140 154 152 158 160 150 C164 142 164 136 160 130 Z"/>
+      <!-- 法令纹 -->
+      <path fill="none" stroke="#f2efe6" stroke-width="4" stroke-linecap="round" opacity=".8" d="M100 150 C86 156 74 162 68 170 M100 150 C114 156 126 162 132 170"/>
+    </svg>
+  </div>
+  <div id="face-text">— 屏息凝神 · 只待那一瞬 —</div>
+
+  <button id="btn-hit" disabled>亮 相</button>
+</div>
+
+<!-- 开始界面 -->
+<div class="overlay" id="ov-start">
+  <div class="panel">
+    <h1>变脸大师</h1>
+    <div class="sub">川 剧 绝 活 · 眼 疾 手 快</div>
+
+    <div class="diff-grid" id="diff-grid"></div>
+
+    <div class="rules">
+      壹 · 脸谱走马灯般换色，张张不同。<br>
+      贰 · 看清上方<em>戏令</em>所指的颜色。<br>
+      叁 · 目标出现的瞬间按<em>亮相</em>，越快分越高。<br>
+      肆 · 按早、按晚、按错，各折一条命，共五命。<br>
+      伍 · 难度越高，换色越快、颜色越难分、得分倍率越高。
+    </div>
+
+    <button class="btn-main" id="btn-start">开 演</button>
+    <div class="sub" style="margin:14px 0 0; letter-spacing:.2em;">建议开启声音 · 支持触屏</div>
+  </div>
+</div>
+
+<!-- 结算界面 -->
+<div class="overlay hidden" id="ov-end">
+  <div class="panel">
+    <h1 id="end-title">落 幕</h1>
+    <div id="end-rank"></div>
+    <div id="end-record"></div>
+    <div id="end-stats"></div>
+    <button class="btn-main" id="btn-again">再 来 一 场</button>
+    <button class="btn-ghost" id="btn-back">更换难度</button>
+  </div>
+</div>
+
+<script>
+/* ================= 难度等级 ================= */
+const PALETTE = [
+  {name:'红', hex:'#e23b3b'}, {name:'橙', hex:'#f08a24'}, {name:'黄', hex:'#f2c744'},
+  {name:'绿', hex:'#3fae5a'}, {name:'青', hex:'#2aa7a0'}, {name:'蓝', hex:'#2f6fd0'},
+  {name:'紫', hex:'#7a4fc9'}, {name:'粉', hex:'#ee7fa9'}, {name:'棕', hex:'#9a6234'},
+  {name:'灰', hex:'#8a8f98'}, {name:'白', hex:'#f2efe6'}, {name:'黑', hex:'#3d3e4a'},
+];
+const LEVELS = [
+  {id:'easy',   name:'学徒', sub:'入梨园 · 稳扎稳打', colors:5,  interval:1000, hint:'swatch', mult:1.0,
+   meta:'5 色 · 每秒 1 变<br>颜色名 + 色牌提示<br>得分 ×1.0'},
+  {id:'normal', name:'台柱', sub:'挑大梁 · 眼疾手快', colors:7,  interval:720,  hint:'swatch', mult:1.6,
+   meta:'7 色 · 每秒 1.4 变<br>颜色名 + 色牌提示<br>得分 ×1.6'},
+  {id:'hard',   name:'宗师', sub:'镇全场 · 名色难分', colors:9,  interval:520,  hint:'text',   mult:2.4,
+   meta:'9 色 · 每秒 ~2 变<br>只报颜色名 · 无提示牌<br>得分 ×2.4'},
+  {id:'expert', name:'绝活', sub:'生死间 · 电光石火', colors:12, interval:360,  hint:'text',   mult:3.5,
+   meta:'12 色 · 每秒 ~3 变<br>只报名字 · 近乎变色龙<br>得分 ×3.5'},
+];
+
+/* ================= 音效 ================= */
+let audioCtx = null, muted = false;
+function ac(){ if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return audioCtx; }
+function tone(freq, dur, type='sine', vol=.12, when=0){
+  if(muted) return; const ctx = ac(); if(!ctx) return;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, ctx.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + when + dur);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(ctx.currentTime + when); o.stop(ctx.currentTime + when + dur);
+}
+const sTick   = () => tone(660, .05, 'square', .04);
+const sTarget = () => { tone(880,.06,'sine',.09); tone(1320,.09,'sine',.07,.05); };
+const sGood   = () => { tone(523,.1,'sine',.14); tone(659,.1,'sine',.14,.07); tone(784,.16,'sine',.14,.14); };
+const sBad    = () => { tone(180,.25,'sawtooth',.16); tone(120,.3,'sawtooth',.14,.08); };
+const sOver   = () => { tone(392,.15,'sine',.14); tone(330,.15,'sine',.14,.15); tone(262,.4,'sine',.14,.3); };
+
+document.getElementById('mute').addEventListener('click', e => {
+  muted = !muted; e.target.textContent = muted ? '🔇' : '🔊';
+});
+
+/* ================= 状态 ================= */
+const $ = id => document.getElementById(id);
+const state = {
+  level:null, running:false,
+  score:0, combo:0, maxCombo:0, lives:5,
+  hits:0, misses:0, faceColor:null, target:null,
+  targetActive:false, appearTime:0, tickTimer:null,
+};
+let selectedLevel = LEVELS[0];
+
+/* ================= 难度选择 UI ================= */
+const grid = $('diff-grid');
+LEVELS.forEach((lv,i) => {
+  const card = document.createElement('div');
+  card.className = 'diff-card' + (i===0 ? ' selected' : '');
+  card.innerHTML = `<div class="d-name">${lv.name}</div><div class="d-sub">${lv.sub}</div><div class="d-meta">${lv.meta}</div>`;
+  card.addEventListener('click', () => {
+    selectedLevel = lv;
+    grid.querySelectorAll('.diff-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+  });
+  grid.appendChild(card);
+});
+
+/* ================= 游戏流程 ================= */
+function setFace(color){
+  state.faceColor = color;
+  $('face-base').setAttribute('fill', color.hex);
+}
+function newTarget(){
+  const pool = PALETTE.slice(0, state.level.colors);
+  let t; do { t = pool[Math.floor(Math.random()*pool.length)]; } while (t === state.faceColor);
+  state.target = t; state.targetActive = false;
+  $('order-name').textContent = '「' + t.name + '」';
+  const sw = $('order-swatch');
+  if(state.level.hint === 'swatch'){ sw.style.display = 'inline-block'; sw.style.background = t.hex;
+    sw.style.color = t.hex; $('order-name').style.color = '#f2efe6'; }
+  else { sw.style.display = 'none'; $('order-name').style.color = '#f2efe6'; }
+}
+function tick(){
+  if(!state.running) return;
+  const pool = PALETTE.slice(0, state.level.colors).filter(c => c !== state.faceColor);
+  const next = pool[Math.floor(Math.random()*pool.length)];
+  const wasTarget = state.targetActive;
+  setFace(next);
+  if(wasTarget){ // 目标脸已翻走还没按 → 错失
+    return onMiss('late');
+  }
+  if(next === state.target){
+    state.targetActive = true;
+    state.appearTime = performance.now();
+    sTarget();
+  } else {
+    sTick();
+  }
+  state.tickTimer = setTimeout(tick, state.level.interval);
+}
+function updateHUD(){
+  $('score').textContent = state.score;
+  $('combo').textContent = state.combo;
+  $('lives').innerHTML = Array.from({length:5}, (_,i) =>
+    `<span class="${i < state.lives ? '' : 'lost'}">◆</span>`).join(' ');
+}
+function flashFace(cls){
+  const f = $('face');
+  f.classList.remove('flash-good','flash-bad'); void f.offsetWidth;
+  f.classList.add(cls); setTimeout(() => f.classList.remove(cls), 400);
+}
+function onMiss(reason){
+  state.targetActive = false;
+  state.combo = 0; state.misses++; state.lives--;
+  clearTimeout(state.tickTimer);
+  sBad(); flashFace('flash-bad');
+  updateHUD();
+  if(state.lives <= 0){ endGame(); return; }
+  newTarget();
+  state.tickTimer = setTimeout(tick, state.level.interval);
+}
+function onHit(){
+  const react = performance.now() - state.appearTime;
+  const speed = Math.max(0, 1 - react / (state.level.interval * 1.1));   // 0~1
+  const comboBonus = 1 + Math.min(state.combo, 20) * .05;
+  const gain = Math.round(100 * state.level.mult * (0.5 + speed) * comboBonus);
+  state.score += gain;
+  state.hits++; state.combo++; state.maxCombo = Math.max(state.maxCombo, state.combo);
+  state.targetActive = false;
+  sGood(); flashFace('flash-good');
+  updateHUD();
+  newTarget();   // 立刻换一道新戏令，节奏不断
+}
+$('btn-hit').addEventListener('click', () => {
+  if(!state.running) return;
+  if(state.targetActive && state.faceColor === state.target) onHit();
+  else onMiss('wrong');
+});
+document.addEventListener('keydown', e => {
+  if(e.code === 'Space' && state.running){ e.preventDefault(); $('btn-hit').click(); }
+});
+
+function startGame(){
+  ac();
+  Object.assign(state, {
+    level: selectedLevel, running:true, score:0, combo:0, maxCombo:0, lives:5,
+    hits:0, misses:0, targetActive:false,
+  });
+  $('ov-start').classList.add('hidden');
+  $('ov-end').classList.add('hidden');
+  $('btn-hit').disabled = false;
+  $('face-text').textContent = '— 看戏令 · 等那一瞬 —';
+  const pool = PALETTE.slice(0, selectedLevel.colors);
+  setFace(pool[Math.floor(Math.random()*pool.length)]);
+  newTarget(); updateHUD();
+  state.tickTimer = setTimeout(tick, 700);
+}
+function rankOf(score){
+  if(score < 800)  return '初入梨园';
+  if(score < 2500) return '小有名气';
+  if(score < 6000) return '名动梨园';
+  return '一代宗师';
+}
+function endGame(){
+  state.running = false;
+  clearTimeout(state.tickTimer);
+  $('btn-hit').disabled = true;
+  sOver();
+  const total = state.hits + state.misses;
+  const acc = total ? Math.round(state.hits / total * 100) : 0;
+  $('end-title').textContent = '落 幕 · ' + state.level.name;
+  $('end-rank').textContent = '「' + rankOf(state.score) + '」';
+  const key = 'bianlian_best_' + state.level.id;
+  const best = +(localStorage.getItem(key) || 0);
+  const rec = $('end-record');
+  if(state.score > best){
+    localStorage.setItem(key, state.score);
+    rec.innerHTML = `本难度最高分 <span class="new">${state.score}（新纪录！）</span>`;
+  } else {
+    rec.textContent = `本难度最高分 ${best}`;
+  }
+  $('end-stats').innerHTML = `
+    <span class="k">分数</span><span class="v">${state.score}</span>
+    <span class="k">最高连击</span><span class="v">${state.maxCombo}</span>
+    <span class="k">准确率</span><span class="v">${acc}%</span>
+    <span class="k">命中 / 失误</span><span class="v">${state.hits} / ${state.misses}</span>`;
+  $('ov-end').classList.remove('hidden');
+}
+$('btn-start').addEventListener('click', startGame);
+$('btn-again').addEventListener('click', startGame);
+$('btn-back').addEventListener('click', () => {
+  $('ov-end').classList.add('hidden');
+  $('ov-start').classList.remove('hidden');
+  $('face-text').textContent = '— 屏息凝神 · 只待那一瞬 —';
+  $('order-name').textContent = '—';
+});
+updateHUD();
+</script>
+</body>
+</html>
